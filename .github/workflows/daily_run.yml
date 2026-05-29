@@ -1,0 +1,30 @@
+name: Daily Colab Dashboard Update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Runs every day at 6:00 AM UTC
+  workflow_dispatch:  # Allows you to manually trigger the run from the GitHub Actions tab
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: pip install requests pandas xgboost scikit-learn gspread google-auth
+
+    - name: Set up GITHUB_TOKEN Secret
+      run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+    - name: Execute Colab Notebook
+      run: |
+        pip install nbconvert
+        jupyter nbconvert --to python HRpropModel_v2.ipynb.ipynb
+        python HRpropModel_v2.ipynb.py
