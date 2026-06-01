@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>MLB HR Prop Engine | Statcast + Weather + Odds</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(circle at 20% 30%, #0a0f1a, #03060b);
+            font-family: 'Inter', 'Segoe UI', 'Fira Code', monospace;
+            color: #eef5ff;
+            padding: 2rem 1.5rem;
+            line-height: 1.4;
+        }
+
+        .glass-panel {
+            background: rgba(12, 20, 30, 0.65);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 2rem;
+            box-shadow: 0 20px 35px -12px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0, 255, 255, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            transition: all 0.2s;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2af5ff, #f5d742);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+            text-shadow: 0 0 8px rgba(42,245,255,0.3);
+        }
+
+        .sub {
+            color: #88bbff;
+            border-left: 3px solid #f5d742;
+            padding-left: 1rem;
+            margin: 0.8rem 0 1.5rem 0;
+            font-size: 0.9rem;
+            font-family: monospace;
+        }
+
+        .badge {
+            background: #0e1a2a;
+            border-radius: 40px;
+            padding: 0.25rem 0.8rem;
+            font-size: 0.7rem;
+            font-weight: 500;
+            color: #7bc5ff;
+            border: 0.5px solid #2f6f9f;
+        }
+
+        .top-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.8rem;
+            margin-bottom: 2rem;
+        }
+
+        .leader-card {
+            flex: 1;
+            min-width: 260px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 2px solid #f5d742;
+            padding-bottom: 0.4rem;
+            width: fit-content;
+        }
+
+        .section-title i {
+            color: #2af5ff;
+            font-style: normal;
+            font-weight: 800;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.8rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.7rem 0.5rem;
+            background: #0b1422cc;
+            color: #f5d742;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #2af5ff40;
+        }
+
+        td {
+            padding: 0.6rem 0.5rem;
+            border-bottom: 1px solid #2a4c6e40;
+            font-family: monospace;
+            vertical-align: top;
+        }
+
+        .highlight-blue {
+            color: #5ef0ff;
+            font-weight: 600;
+        }
+
+        .highlight-yellow {
+            color: #ffdd66;
+            font-weight: 700;
+        }
+
+        .odds-positive {
+            color: #aaffaa;
+        }
+        .odds-negative {
+            color: #ffaa88;
+        }
+        .model-score {
+            background: #1e2a3a;
+            border-radius: 20px;
+            padding: 2px 8px;
+            font-weight: bold;
+            font-size: 0.75rem;
+            display: inline-block;
+        }
+        .warning-badge {
+            background: #f5a62320;
+            color: #f5d742;
+            font-size: 0.65rem;
+            border-radius: 12px;
+            padding: 2px 6px;
+            margin-left: 6px;
+        }
+        .game-cluster {
+            margin-bottom: 2rem;
+            break-inside: avoid;
+        }
+        .game-header {
+            background: linear-gradient(90deg, #0f212f, #07121e);
+            padding: 0.8rem 1rem;
+            border-radius: 1.2rem 1.2rem 0 0;
+            border-left: 5px solid #f5d742;
+            margin-bottom: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .game-status {
+            font-size: 0.7rem;
+            background: #00000066;
+            padding: 0.2rem 0.6rem;
+            border-radius: 40px;
+        }
+        .weather-info {
+            font-size: 0.7rem;
+            color: #aac9ff;
+        }
+        .pitcher-line {
+            font-size: 0.7rem;
+            background: #07121c;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            margin: 0.5rem 0;
+        }
+        .player-row:hover {
+            background: #0f2b3f60;
+        }
+        .footer-diagnostic {
+            font-size: 0.65rem;
+            font-family: monospace;
+            color: #5f7f9f;
+            border-top: 1px dashed #2f6f9f40;
+            margin-top: 2rem;
+            padding-top: 1rem;
+        }
+        @media (max-width: 700px) {
+            body { padding: 1rem; }
+            .game-header { flex-direction: column; gap: 6px; }
+            td, th { font-size: 0.7rem; padding: 0.4rem 0.2rem; }
+        }
+        .loading {
+            text-align: center;
+            font-size: 1.2rem;
+            padding: 3rem;
+            color: #2af5ff;
+        }
+    </style>
+</head>
+<body>
+
+<div class="glass-panel" style="text-align: center; padding-bottom: 1rem;">
+    <h1>⚾ MLB HR PROP ENGINE</h1>
+    <div class="sub">Statcast + Weather + Live Odds | High-Fidelity Model | Dark/Tech Theme</div>
+    <div id="lastUpdateBadge" class="badge" style="margin-top: 6px;">⟳ loading data...</div>
+</div>
+
+<div id="appRoot">
+    <div class="loading">🌀 FETCHING MLB SCHEDULE, WEATHER, STATCAST & DK LINES<br>🔧 high-tech propulsion active</div>
+</div>
+
+<script>
+    // ============================================================
+    // HARDCODED API KEY (free tier, no billing)
+    // ============================================================
+    const OPENWEATHER_API_KEY = "3b1c666e88254b0827f0f37e326aa46f";
+    const DK_LEAGUE_ID = "84240";
+    const DK_HR_SUBCATEGORY = "17319";
+    const DK_HR_LIVE_SUBCATEGORIES = ["17482", "17320", "17321"];
+    const DK_SITE = "US-PA-SB";
+
+    // Park factors & bearings
+    const parkFactors = {
+        COL:130, CIN:115, TEX:112, HOU:108, BAL:107, TOR:107, WSH:105, LAA:105, MIN:102,
+        BOS:100, ATL:100, PHI:100, NYY:100, ARI:100, CLE:100, MIL:100, MIA:96, NYM:96,
+        LAD:96, ATH:97, SD:97, TB:97, KC:97, CWS:93, DET:92, SF:93, SEA:95, STL:95, PIT:94, CHC:94
+    };
+    const parkBearings = { ARI:359.75, ATL:157.65, BAL:31.34, BOS:44.17, CHC:37.62, CIN:122.34, CLE:359.25, COL:4.96, CWS:127.06, DET:151.23, HOU:343.17, KC:46.71, LAA:44.17, LAD:26.48, MIA:128.13, MIL:128.85, MIN:90.5, NYM:13.99, NYY:75.62, ATH:54.51, PHI:10.07, PIT:116.58, SD:359.74, SEA:49.31, SF:85.15, STL:62.7, TB:49.0, TEX:32.8, TOR:344.09, WSH:28.95 };
+    const stadiumCoords = {
+        "Arizona Diamondbacks":{lat:33.4453,lon:-112.0667},"Atlanta Braves":{lat:33.8907,lon:-84.4677},"Baltimore Orioles":{lat:39.2838,lon:-76.6218},"Boston Red Sox":{lat:42.3467,lon:-71.0972},"Chicago Cubs":{lat:41.9484,lon:-87.6553},"Chicago White Sox":{lat:41.8299,lon:-87.6338},"Cincinnati Reds":{lat:39.0979,lon:-84.5082},"Cleveland Guardians":{lat:41.4962,lon:-81.6852},"Colorado Rockies":{lat:39.7559,lon:-104.9942},"Detroit Tigers":{lat:42.339,lon:-83.0485},"Houston Astros":{lat:29.7573,lon:-95.3555},"Kansas City Royals":{lat:39.0517,lon:-94.4803},"Los Angeles Angels":{lat:33.8003,lon:-117.8827},"Los Angeles Dodgers":{lat:34.0739,lon:-118.24},"Miami Marlins":{lat:25.7781,lon:-80.2197},"Milwaukee Brewers":{lat:43.028,lon:-87.9712},"Minnesota Twins":{lat:44.9817,lon:-93.2776},"New York Mets":{lat:40.7571,lon:-73.8458},"New York Yankees":{lat:40.8296,lon:-73.9262},"Athletics":{lat:38.5802,lon:-121.4687},"Philadelphia Phillies":{lat:39.9061,lon:-75.1665},"Pittsburgh Pirates":{lat:40.4469,lon:-80.0057},"San Diego Padres":{lat:32.7076,lon:-117.157},"Seattle Mariners":{lat:47.5914,lon:-122.3325},"San Francisco Giants":{lat:37.7786,lon:-122.3893},"St. Louis Cardinals":{lat:38.6226,lon:-90.1928},"Tampa Bay Rays":{lat:27.7682,lon:-82.6534},"Texas Rangers":{lat:32.7512,lon:-97.0832},"Toronto Blue Jays":{lat:43.6414,lon:-79.3894},"Washington Nationals":{lat:38.873,lon:-77.0074}
+    };
+    const rotoAbbrToFull = { ARI:"Arizona Diamondbacks", ATL:"Atlanta Braves", BAL:"Baltimore Orioles", BOS:"Boston Red Sox", CHC:"Chicago Cubs", CWS:"Chicago White Sox", CIN:"Cincinnati Reds", CLE:"Cleveland Guardians", COL:"Colorado Rockies", DET:"Detroit Tigers", HOU:"Houston Astros", KC:"Kansas City Royals", LAA:"Los Angeles Angels", LAD:"Los Angeles Dodgers", MIA:"Miami Marlins", MIL:"Milwaukee Brewers", MIN:"Minnesota Twins", NYM:"New York Mets", NYY:"New York Yankees", ATH:"Athletics", PHI:"Philadelphia Phillies", PIT:"Pittsburgh Pirates", SD:"San Diego Padres", SEA:"Seattle Mariners", SF:"San Francisco Giants", STL:"St. Louis Cardinals", TB:"Tampa Bay Rays", TEX:"Texas Rangers", TOR:"Toronto Blue Jays", WSH:"Washington Nationals" };
+    const fullToRotoAbbr = Object.fromEntries(Object.entries(rotoAbbrToFull).map(([k,v])=>[v,k]));
+    fullToRotoAbbr["Oakland Athletics"]="ATH";
+
+    function standardizeAbbr(abbr) { let u=abbr?.toUpperCase().trim()||""; const map={WAS:"WSH",CHW:"CWS"}; return map[u]||u; }
+    function windDegToDir(deg){ if(deg==null) return "N/A"; const dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]; return dirs[Math.floor(deg/22.5+0.5)%16];}
+    function weatherShort(wx){ if(!wx) return "N/A"; return `${wx.temp}°F, Wind ${wx.windSpeed} mph ${wx.windDir}`; }
+    function compassToDegrees(c){ const m={N:0,NNE:22.5,NE:45,ENE:67.5,E:90,ESE:112.5,SE:135,SSE:157.5,S:180,SSW:202.5,SW:225,WSW:247.5,W:270,WNW:292.5,NW:315,NNW:337.5}; return m[c?.toUpperCase()]||0; }
+    function normalizeName(name){ return (name||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w\s]/g,"").replace(/\b(jr|sr|ii|iii|iv)\b/g,"").trim().replace(/\s+/g," ");}
+    function nameMatches(n1,n2){ if(!n1||!n2) return false; let a=normalizeName(n1),b=normalizeName(n2); if(a===b) return true; let p1=a.split(" "),p2=b.split(" "); if(p1.length>1 && p2.length>1 && p1[p1.length-1]===p2[p2.length-1] && p1[0][0]===p2[0][0]) return true; return false; }
+    function getStabilizedHr9(hr9Raw, ip){ let hr9=parseFloat(hr9Raw)||1.2; let innings=parseFloat(ip); if(isNaN(innings)||innings<=0) return 1.2; return (hr9*innings+1.2*30)/(innings+30); }
+    function stabilizeStatcastProps(st){ let ev=st?.ev||89, barrel=st?.barrel||6.5, la=st?.la||14, hh=st?.hh||38, ss=st?.ss||33, pull=st?.pull||40, bbe=st?.bbe||0; let w=Math.min(1, bbe/50); return { ev:ev*w+89*(1-w), barrel:barrel*w+6.5*(1-w), la:la*w+14*(1-w), hh:hh*w+38*(1-w), ss:ss*w+33*(1-w), pull:pull*w+40*(1-w), isFallback:!st?.ev }; }
+    function calcHRProb(barrel,hh,ss,pull,hr9,goao,ip,pf,temp,windDir,windSpeed,isLive,platoonAdv){
+        let windDeg=compassToDegrees(windDir);
+        let bearing=parkBearings[pf]||0;
+        let wC=(windSpeed||0)*Math.cos(((windDeg+180-bearing)*Math.PI)/180)*0.015;
+        let stHR9=(hr9*ip+1.2*30)/(ip+30);
+        let stGOAO=(goao*ip+1.1*30)/(ip+30);
+        let batter_z=Math.log(Math.max(0.5,barrel)/7)*0.7+Math.log(Math.max(20,hh)/38)*0.5+Math.log(Math.max(20,ss)/33)*0.3+Math.log(Math.max(20,pull)/40)*0.4;
+        let pitcher_z=Math.log(stHR9/1.15)*0.4+Math.log(1.1/Math.max(0.5,stGOAO))*0.6;
+        let wind_z=Math.min(Math.max(wC,-0.4),0.4);
+        let env_z=0.5*Math.log(pf/100)+0.007*(temp-70)+wind_z;
+        let platoon_z=platoonAdv?0.08:-0.08;
+        let z=-3.75+batter_z+pitcher_z+env_z+platoon_z;
+        let p_pa=Math.max(0.001,Math.min(0.25,1/(1+Math.exp(-z))));
+        let prob=1-Math.pow(1-p_pa,isLive?2.5:4.1);
+        let score=Math.round(30+Math.log(prob/0.01)*20+(isLive?8:0));
+        return {prob,score:Math.min(105,Math.max(10,score))};
+    }
+
+    async function fetchJSON(url, opts={}){ const res=await fetch(url,opts); if(!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); }
+    async function fetchText(url){ const r=await fetch(url); if(!r.ok) throw new Error(); return r.text(); }
+
+    let gameWeatherCache={}, pitcherStatsMap={}, playerPhysicalCache={}, statcastMap={}, nameToMlbId={}, playerTeamMap={};
+
+    (async function(){
+        const root=document.getElementById("appRoot");
+        try{
+            let today=new Date(); let offset=-4; let localDate=new Date(today.getTime()+(-4*60-today.getTimezoneOffset())*60000);
+            let dateStr=localDate.toISOString().slice(0,10);
+            let schedUrl=`https://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&date=${dateStr}&hydrate=probablePitcher`;
+            let schedData=await fetchJSON(schedUrl);
+            let games=schedData.dates?.[0]?.games?.filter(g=>["Preview","Live","Final"].includes(g.status.abstractGameState))||[];
+            if(games.length===0){
+                let tomorrow=new Date(localDate); tomorrow.setDate(tomorrow.getDate()+1);
+                let altDate=tomorrow.toISOString().slice(0,10);
+                let altSched=await fetchJSON(`https://statsapi.mlb.com/api/v1/schedule/games/?sportId=1&date=${altDate}&hydrate=probablePitcher`);
+                games=altSched.dates?.[0]?.games?.filter(g=>["Preview","Live","Final"].includes(g.status.abstractGameState))||[];
+                dateStr=altDate;
+            }
+            if(games.length===0) throw new Error("No games found on schedule.");
+            for(let g of games){
+                let home=g.teams.home.team.name;
+                let coord=stadiumCoords[home];
+                if(coord){
+                    try{
+                        let wx=await fetchJSON(`https://api.openweathermap.org/data/2.5/weather?lat=${coord.lat}&lon=${coord.lon}&appid=${OPENWEATHER_API_KEY}&units=imperial`);
+                        if(wx.main) gameWeatherCache[home]={ temp:Math.round(wx.main.temp), windSpeed:Math.round(wx.wind?.speed||0), windDir:windDegToDir(wx.wind?.deg), desc:wx.weather?.[0]?.description||"" };
+                    }catch(e){}
+                }
+            }
+            let pitcherIdMap={}, pitcherIds=new Set();
+            for(let g of games){
+                let hA=standardizeAbbr(fullToRotoAbbr[g.teams.home.team.name]||g.teams.home.team.name);
+                let aA=standardizeAbbr(fullToRotoAbbr[g.teams.away.team.name]||g.teams.away.team.name);
+                let gKey=[hA,aA].sort().join(" vs ");
+                pitcherIdMap[gKey]={};
+                for(let side of ["home","away"]){
+                    let pp=g.teams[side].probablePitcher;
+                    pitcherIdMap[gKey][side]=pp?.id?{name:pp.fullName,id:pp.id}:{name:"TBD",id:null};
+                    if(pp?.id) pitcherIds.add(pp.id);
+                }
+            }
+            let pArr=Array.from(pitcherIds);
+            for(let i=0;i<pArr.length;i+=50){
+                let chunk=pArr.slice(i,i+50);
+                let data=await fetchJSON(`https://statsapi.mlb.com/api/v1/people?personIds=${chunk.join(",")}&hydrate=stats(type=season,group=pitching,season=${new Date().getFullYear()})`);
+                for(let person of data.people||[]){
+                    let split=person.stats?.[0]?.splits?.[0]?.stat;
+                    if(split){
+                        let ipParts=String(split.inningsPitched||"0").split(".");
+                        let ipFull=parseFloat(ipParts[0])+parseFloat(ipParts[1]||0)/3;
+                        pitcherStatsMap[person.id]={ hr9:ipFull>0?(((parseFloat(split.homeRuns)||0)/ipFull)*9).toFixed(2):"1.20", goao:parseFloat(split.groundOutsToAirouts)||1.1, ip:ipFull };
+                    }
+                }
+            }
+            let todayTeams=new Set();
+            for(let g of games){ let hA=standardizeAbbr(fullToRotoAbbr[g.teams.home.team.name]||g.teams.home.team.name); let aA=standardizeAbbr(fullToRotoAbbr[g.teams.away.team.name]||g.teams.away.team.name); todayTeams.add(hA); todayTeams.add(aA); }
+            const teamIdMap={ ARI:109, ATL:144, BAL:110, BOS:111, CHC:112, CWS:145, CIN:113, CLE:114, COL:115, DET:116, HOU:117, KC:118, LAA:108, LAD:119, MIA:146, MIL:158, MIN:142, NYM:121, NYY:147, ATH:133, PHI:143, PIT:134, SD:135, SEA:136, SF:137, STL:138, TB:139, TEX:140, TOR:141, WSH:120 };
+            for(let abbr of todayTeams){
+                let tid=teamIdMap[abbr];
+                if(!tid) continue;
+                try{
+                    let roster=await fetchJSON(`https://statsapi.mlb.com/api/v1/teams/${tid}/roster?rosterType=40Man&season=${new Date().getFullYear()}`);
+                    for(let r of roster.roster||[]){
+                        if(r.person?.id){
+                            let name=r.person.fullName.trim();
+                            nameToMlbId[name.toLowerCase()]=r.person.id;
+                            playerTeamMap[name]={team:abbr};
+                        }
+                    }
+                }catch(e){}
+            }
+            let scYear=new Date().getFullYear();
+            let csvText;
+            try{
+                csvText=await fetchText(`https://baseballsavant.mlb.com/leaderboard/custom?year=${scYear}&type=batter&min=1&selections=exit_velocity_avg,launch_angle_avg,barrel_batted_rate,batted_ball_events,hard_hit_percent,sweet_spot_percent,pull_percent&csv=true`);
+                if(csvText.includes("<html")) throw new Error();
+            }catch(e){
+                scYear=scYear-1;
+                csvText=await fetchText(`https://baseballsavant.mlb.com/leaderboard/custom?year=${scYear}&type=batter&min=1&selections=exit_velocity_avg,launch_angle_avg,barrel_batted_rate,batted_ball_events,hard_hit_percent,sweet_spot_percent,pull_percent&csv=true`);
+            }
+            const lines=csvText.split(/\r?\n/);
+            if(lines.length>1){
+                let headers=lines[0].split(",").map(h=>h.trim().toLowerCase());
+                let idIdx=headers.findIndex(h=>h.includes("player_id"));
+                let evIdx=headers.findIndex(h=>h.includes("exit_velocity_avg"));
+                let laIdx=headers.findIndex(h=>h.includes("launch_angle_avg"));
+                let brlIdx=headers.findIndex(h=>h.includes("barrel_batted_rate"));
+                let bbeIdx=headers.findIndex(h=>h.includes("batted_ball_events"));
+                let hhIdx=headers.findIndex(h=>h.includes("hard_hit_percent"));
+                let ssIdx=headers.findIndex(h=>h.includes("sweet_spot_percent"));
+                let pullIdx=headers.findIndex(h=>h.includes("pull_percent"));
+                for(let i=1;i<lines.length;i++){
+                    let row=lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                    if(row.length<5) continue;
+                    let pid=parseInt(row[idIdx]);
+                    if(isNaN(pid)) continue;
+                    statcastMap[pid]={ ev:parseFloat(row[evIdx]), la:parseFloat(row[laIdx]), barrel:parseFloat(row[brlIdx]), bbe:parseFloat(row[bbeIdx]), hh:parseFloat(row[hhIdx]), ss:parseFloat(row[ssIdx]), pull:parseFloat(row[pullIdx]) };
+                }
+            }
+            let gameData={};
+            for(let sub of [DK_HR_SUBCATEGORY,...DK_HR_LIVE_SUBCATEGORIES]){
+                try{
+                    let url=`https://sportsbook-nash.draftkings.com/sites/${DK_SITE}/api/sportscontent/controldata/league/leagueSubcategory/v1/markets?isBatchable=false&templateVars=${encodeURIComponent(DK_LEAGUE_ID+","+sub)}&eventsQuery=${encodeURIComponent("$filter=leagueId eq '"+DK_LEAGUE_ID+"' AND clientMetadata/Subcategories/any(s: s/Id eq '"+sub+"')")}&marketsQuery=${encodeURIComponent("$filter=clientMetadata/subCategoryId eq '"+sub+"')")}&include=Events&entity=events`;
+                    let dk=await fetchJSON(url);
+                    let eventMap={}, marketMap={};
+                    (dk.events||[]).forEach(e=>{ eventMap[e.id]={ h:e.homeTeamName, a:e.awayTeamName }; });
+                    (dk.markets||[]).forEach(m=>{ marketMap[m.id]=m; });
+                    (dk.selections||[]).filter(s=>["1+","2+","3+"].includes(s.label?.trim())).forEach(sel=>{
+                        let playerInfo=sel.participants?.find(x=>!x.type||x.type==="Player");
+                        let name=playerInfo?.name||playerInfo?.displayName;
+                        if(!name) return;
+                        let oddsRaw=sel.displayOdds?.american??sel.americanOdds;
+                        if(oddsRaw==null) return;
+                        let odds=parseFloat(String(oddsRaw).replace("+",""));
+                        let matchedName=Object.keys(playerTeamMap).find(rn=>nameMatches(rn,name));
+                        if(!matchedName||isNaN(odds)) return;
+                        let teamInfo=playerTeamMap[matchedName];
+                        let gameKey=Object.keys(pitcherIdMap).find(k=>k.split(" vs ").includes(teamInfo.team));
+                        if(!gameKey) continue;
+                        if(!gameData[gameKey]) gameData[gameKey]={};
+                        if(!gameData[gameKey][matchedName]) gameData[gameKey][matchedName]={team:teamInfo.team, books:[]};
+                        let bookName=`DraftKings ${sel.label.trim()}`;
+                        let existing=gameData[gameKey][matchedName].books.find(b=>b.book===bookName);
+                        if(existing) existing.odds=Math.max(existing.odds,odds);
+                        else gameData[gameKey][matchedName].books.push({book:bookName, odds});
+                    });
+                }catch(e){ console.warn(e); }
+            }
+            let allTargets=[];
+            let gamesHtml="";
+            for(let g of games){
+                let hF=g.teams.home.team.name, aF=g.teams.away.team.name;
+                let hA=standardizeAbbr(fullToRotoAbbr[hF]||hF), aA=standardizeAbbr(fullToRotoAbbr[aF]||aF);
+                let gameKey=[hA,aA].sort().join(" vs ");
+                let wx=gameWeatherCache[hF]||{temp:72,windSpeed:0,windDir:""};
+                let pf=parkFactors[hA]||100;
+                let isLive=g.status.abstractGameState==="Live";
+                let isFinal=g.status.abstractGameState==="Final";
+                let pitchers=pitcherIdMap[gameKey]||{};
+                let homePitcher=pitchers.home, awayPitcher=pitchers.away;
+                let homePitcherHr9=homePitcher?.id&&pitcherStatsMap[homePitcher.id]?pitcherStatsMap[homePitcher.id].hr9:"—";
+                let awayPitcherHr9=awayPitcher?.id&&pitcherStatsMap[awayPitcher.id]?pitcherStatsMap[awayPitcher.id].hr9:"—";
+                let gd=gameData[gameKey]||{};
+                let rowsHtml="";
+                for(let [playerName,info] of Object.entries(gd)){
+                    let pid=nameToMlbId[playerName.toLowerCase()];
+                    if(!pid) continue;
+                    let st=stabilizeStatcastProps(statcastMap[pid]||{});
+                    let oppPitcherId=info.team===hA?awayPitcher?.id:homePitcher?.id;
+                    let oppStats=oppPitcherId?pitcherStatsMap[oppPitcherId]:null;
+                    let hr9Raw=oppStats?.hr9||1.2, goaoRaw=oppStats?.goao||1.1, ip=oppStats?.ip||0;
+                    let ph=getStabilizedHr9(hr9Raw,ip);
+                    let pitcherName=info.team===hA?awayPitcher?.name:homePitcher?.name;
+                    let platoonAdv=((playerPhysicalCache[pid]?.stand||"R")!=="R") || true;
+                    let {prob,score}=calcHRProb(st.barrel,st.hh,st.ss,st.pull,hr9Raw,goaoRaw,ip,pf,wx.temp,wx.windDir,wx.windSpeed,isLive,platoonAdv);
+                    let bestOddsObj=info.books.reduce((a,b)=>a.odds>b.odds?a:b,{odds:0});
+                    let oddsVal=bestOddsObj.odds;
+                    let implied=oddsVal>0?100/(oddsVal+100):Math.abs(oddsVal)/(Math.abs(oddsVal)+100);
+                    let edge=(prob-implied)*100;
+                    let oddsStr=oddsVal?`${oddsVal>0?"+":""}${oddsVal}`:"—";
+                    let fallbackTag=!statcastMap[pid]?.ev?"⚠️ AVG":(statcastMap[pid]?.bbe<30?"⚠️ PARTIAL":"");
+                    allTargets.push({player:playerName,team:info.team,score,prob,edge,odds:oddsStr,brl:st.barrel.toFixed(1),hh:st.hh.toFixed(1),pull:st.pull.toFixed(1),hr9:ph.toFixed(2),live:isLive,fallback:fallbackTag});
+                    rowsHtml+=`<tr class="player-row"><td><span class="highlight-yellow">${playerName}</span> ${fallbackTag&&`<span class="warning-badge">${fallbackTag}</span>`}</td><td>${score}/105</td><td>${(prob*100).toFixed(1)}%</td><td>${edge>0?`<span class="highlight-blue">+${edge.toFixed(1)}%</span>`:`${edge.toFixed(1)}%`}</td><td>${oddsStr}</td><td>Brl:${st.barrel.toFixed(1)}% | HH:${st.hh.toFixed(1)}%</td><td>${pitcherName||"TBD"}<br><span class="badge">HR/9 ${ph.toFixed(2)}</span></td><td>${weatherShort(wx)}</td></tr>`;
+                }
+                let gameStatus=`${isLive?"⚡ LIVE":(isFinal?"✅ FINAL":"📋 PREVIEW")} ${g.status.detailedState||""}`;
+                gamesHtml+=`<div class="game-cluster glass-panel"><div class="game-header"><div><strong>${aA} @ ${hA}</strong> <span class="game-status">${gameStatus}</span></div><div class="weather-info">🌡️ ${weatherShort(wx)} | PF: ${pf}</div></div><div class="pitcher-line">🧢 SP: ${awayPitcher?.name||"TBD"} (HR/9 ${awayPitcherHr9})  |  🧢 ${homePitcher?.name||"TBD"} (HR/9 ${homePitcherHr9})</div>${rowsHtml?`<table><thead><tr><th>Batter</th><th>Model</th><th>HR Prob</th><th>Edge</th><th>Best DK</th><th>Statcast</th><th>Opp Pitcher</th><th>Weather</th></tr></thead><tbody>${rowsHtml}</tbody></table>`:`<div style="padding:1rem; text-align:center;">⚠️ No DraftKings HR lines available</div>`}</div>`;
+            }
+            let sortedScore=[...allTargets].sort((a,b)=>b.score-a.score).slice(0,10);
+            let sortedEdge=[...allTargets].filter(t=>t.edge>0).sort((a,b)=>b.edge-a.edge).slice(0,8);
+            root.innerHTML=`
+                <div class="top-grid">
+                    <div class="leader-card glass-panel"><div class="section-title"><i>🔥</i> TOP 10 HR TARGETS (Model)</div><table><thead><tr><th>Player (Team)</th><th>Score</th><th>Prob</th><th>Edge</th><th>Odds</th></tr></thead><tbody>${sortedScore.map(p=>`<tr><td>${p.player} ${p.live?"⚡":""} <span class="badge">${p.team}</span> ${p.fallback}</td><td class="highlight-blue">${p.score}</td><td>${(p.prob*100).toFixed(1)}%</td><td class="${p.edge>0?'highlight-yellow':''}">${p.edge>0?"+"}${p.edge.toFixed(1)}%</td><td>${p.odds}</td></tr>`).join("")}</tbody></table></div>
+                    <div class="leader-card glass-panel"><div class="section-title"><i>💰</i> TOP +EV BETS</div><table><thead><tr><th>Player</th><th>Model Prob</th><th>Edge %</th><th>Odds</th></tr></thead><tbody>${sortedEdge.map(p=>`<tr><td>${p.player} (${p.team})</td><td>${(p.prob*100).toFixed(1)}%</td><td class="highlight-yellow">+${p.edge.toFixed(1)}%</td><td>${p.odds}</td></tr>`).join("")}</tbody></table></div>
+                </div>
+                ${gamesHtml}
+                <div class="footer-diagnostic">⚙️ ENGINE v50 | Statcast ${scYear} | weather via OpenWeather | ${games.length} games | Targets: ${allTargets.length} | ${new Date().toLocaleString()}</div>
+            `;
+            document.getElementById("lastUpdateBadge").innerHTML=`✅ LIVE DATA • ${games.length} games • ${new Date().toLocaleString()}`;
+        }catch(err){
+            console.error(err);
+            root.innerHTML=`<div class="glass-panel" style="color:#ff9977;">⚠️ ERROR: ${err.message}<br>Check console or network (CORS might block some APIs). Refresh or try again later.</div>`;
+        }
+    })();
+</script>
+</body>
+</html>
